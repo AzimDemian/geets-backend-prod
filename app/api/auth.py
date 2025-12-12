@@ -24,6 +24,10 @@ class LoginRequest(BaseModel):
     username: str = Field(min_length=3, max_length=50)
     password: str = Field(min_length=8, max_length=100)
 
+class SuccessfulAuthResponse(BaseModel):
+    token: str
+    token_type: str = 'bearer'
+
 
 def get_password_hash(plain: str) -> str:
     return pwd_ctx.hash(plain)
@@ -40,8 +44,8 @@ def create_access_token(data: dict) -> str:
     return jwt.encode(to_encode, SECRET_KEY, ALGORITHM)
 
 
-@router.post('/register', response_model=dict)
-async def register(data: LoginRequest, session: Session = Depends(get_session)):
+@router.post('/register')
+async def register(data: LoginRequest, session: Session = Depends(get_session)) -> SuccessfulAuthResponse:
     existing = session.exec(select(User).where(User.username == data.username)).first()
     if existing:
         raise HTTPException(status_code=400, detail='Username already registered')
@@ -50,11 +54,12 @@ async def register(data: LoginRequest, session: Session = Depends(get_session)):
     session.add(user)
     session.commit()
     session.refresh(user)
-    return {'id': str(user.id), 'username': user.username}
+    token = create_access_token({'sub': str(user.id), 'username': user.username})
+    return SuccessfulAuthResponse(token=token)
 
 
 @router.post('/login')
-async def login(data: LoginRequest, session: Session = Depends(get_session)):
+async def login(data: LoginRequest, session: Session = Depends(get_session)) -> SuccessfulAuthResponse:
     user = session.exec(select(User).where(User.username == data.username)).first()
     if not user or not verify_password(data.password, user.password):
         raise HTTPException(
@@ -63,4 +68,4 @@ async def login(data: LoginRequest, session: Session = Depends(get_session)):
             headers={'WWW-Authenticate': 'Bearer'},
         )
     token = create_access_token({'sub': str(user.id), 'username': user.username})
-    return {'token': token, 'token_type': 'bearer'}
+    return SuccessfulAuthResponse(token=token)
