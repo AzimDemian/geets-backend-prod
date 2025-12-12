@@ -3,6 +3,8 @@ import re
 
 from passlib.context import CryptContext
 
+RMQ_URL = 'amqp://guest:guest@localhost'
+
 TOKEN_SECRET_KEY = os.getenv('JWT_SECRET')
 if not TOKEN_SECRET_KEY:
     raise RuntimeError('Missing env variable: JWT_SECRET')
