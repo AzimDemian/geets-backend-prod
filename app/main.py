@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from enum import Enum
 from typing import Union
 
@@ -6,16 +7,17 @@ from pydantic import BaseModel
 
 from api import api_router
 from db.session import init_db
+from ws import ws_router
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
+app = FastAPI(lifespan=lifespan)
 app.include_router(api_router)
+app.include_router(ws_router)
 
 @app.get('/')
 async def read_root():
     return {'Hello': 'World'}
-
-def main():
-    init_db()
-
-if __name__ == '__main__':
-    main()
