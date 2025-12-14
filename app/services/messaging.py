@@ -1,30 +1,80 @@
 import json
 import logging
+import uuid
 
-import aio_pika
 from sqlmodel import Session, select
 
-from db.session import get_session
 from schemas import ConversationParticipant, Message
-from ws.connection import manager
 
 logger = logging.getLogger(__name__)
 
-async def rmq_websocket_handler(inc_message: aio_pika.IncomingMessage) -> None:
-    try:
-        data = json.loads(inc_message.body.decode())
-        message = Message.model_validate(data)
-        message_str = message.model_dump_json()
-        message_dict = json.loads(message_str)
+class PermissionError(Exception):
+    pass
 
-        session: Session = next(get_session())
+def is_participant(session: Session, user_id: uuid.UUID, conversation_id: uuid.UUID):
+    participant = session.exec(
+        select(ConversationParticipant)
+        .where(
+            ConversationParticipant.conversation_id == conversation_id,
+            ConversationParticipant.user_id == user_id,
+        )
+    ).first()
 
-        participants = session.exec(
-            select(ConversationParticipant)
-            .where(ConversationParticipant.conversation_id == message.conversation_id)
-        ).fetchall()
+    return bool(participant)
 
-        for participant in participants:
-            await manager.send_to_user(message_dict, participant.user_id)
-    except Exception:
-        logger.exception('Failed to bridge RMQ to WS')
+def create_message(session: Session, user_id: uuid.UUID, payload: dict) -> dict:
+    if not is_participant(session, user_id, payload['conversation_id']):
+        raise PermissionError('Not a participant')
+
+    message = Message(
+        conversation_id=payload['conversation_id'],
+        sender_id=user_id,
+        body=payload['body'],
+    )
+    session.add(message)
+    session.commit()
+    session.refresh(message)
+
+    message_json = message.model_dump_json()
+    return json.loads(message_json)
+
+
+def edit_message(session: Session, user_id: uuid.UUID, payload: dict) -> dict:
+    message = session.get(Message, payload['id'])
+    if not message or message.deleted:
+        raise ValueError('Message not found')
+
+    if not is_participant(session, user_id, message.conversation_id):
+        raise PermissionError('Not a participant')
+    
+    if message.sender_id != user_id:
+        raise PermissionError('Only sender can edit the message')
+    
+    message.body = payload['new_body']
+    message.edited = True
+    session.add(message)
+    session.commit()
+    session.refresh(message)
+
+    message_json = message.model_dump_json()
+    return json.loads(message_json)
+
+
+def delete_message(session: Session, user_id: uuid.UUID, payload: dict) -> dict:
+    message = session.get(Message, payload['id'])
+    if not message or message.deleted:
+        raise ValueError('Message not found')
+
+    if not is_participant(session, user_id, message.conversation_id):
+        raise PermissionError('Not a participant')
+    
+    if message.sender_id != user_id:
+        raise PermissionError('Only sender can delete the message')
+    
+    message.deleted = True
+    session.add(message)
+    session.commit()
+    session.refresh(message)
+
+    message_json = message.model_dump_json()
+    return json.loads(message_json)
