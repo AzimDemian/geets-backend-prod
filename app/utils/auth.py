@@ -6,8 +6,6 @@ import jwt
 from fastapi import Query
 
 from config import TOKEN_SECRET_KEY, TOKEN_ALGORITHM, TOKEN_EXPIRE_MINS, pwd_ctx
-from db.session import get_session
-from schemas.user import User
 
 def get_password_hash(plain: str) -> str:
     return pwd_ctx.hash(plain)

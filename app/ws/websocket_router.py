@@ -66,8 +66,6 @@ async def ws_messages_endpoint(
                 routing_key=f'create.{ws_message.conversation_id}',
                 payload=message_dict,
             )
-
-            await websocket.send_json(message_dict)
     except ValidationError:
         raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)
     except WebSocketDisconnect:

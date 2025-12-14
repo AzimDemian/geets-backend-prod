@@ -40,5 +40,5 @@ class RMQConsumer:
                 if self._stopping:
                     break
 
-    async def stop(self):
+    async def stop_consuming(self):
         self._stopping = True
