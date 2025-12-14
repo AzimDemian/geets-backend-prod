@@ -15,7 +15,7 @@ router = APIRouter(prefix='/conversations')
 
 class CreateConversationRequest(BaseModel):
     title: str = Field(max_length=100)
-    participant_ids: list[uuid.UUID] = Field(max_length=100)
+    other_id: uuid.UUID
 
 @router.post('/create')
 async def create_conversation(
@@ -23,31 +23,25 @@ async def create_conversation(
     user_id: Annotated[uuid.UUID, Depends(get_token_user_id_http)],
     session: Session = Depends(get_session),
 ) -> Conversation:
-    added_participants = session.exec(select(User.id).where(User.id.in_(data.participant_ids))).all()
-    if len(added_participants) != len(data.participant_ids):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Non-existing user(s)')
+    other = session.get(User, data.other_id)
+    if not other:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Adding a non-existing user')
 
-    is_group = len(added_participants) > 1
-
-    conversation = Conversation(title=data.title, is_group=is_group)
-    participants = []
+    conversation = Conversation(title=data.title)
 
     creating_participant = ConversationParticipant(
         conversation_id=conversation.id,
         user_id=user_id,
-        role=ParticipantRole.ADMIN if is_group else ParticipantRole.MEMBER,
     )
-    participants.append(creating_participant)
-
-    for new_participant_id in data.participant_ids:
-        conversation_participant = ConversationParticipant(
-            conversation_id=conversation.id,
-            user_id=new_participant_id,
-        )
-        participants.append(conversation_participant)
+    
+    other_participant = ConversationParticipant(
+        conversation_id=conversation.id,
+        user_id=other.id,
+    )
 
     session.add(conversation)
-    session.add_all(participants)
+    session.add(creating_participant)
+    session.add(other_participant)
     session.commit()
     session.refresh(conversation)
 

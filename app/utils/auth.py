@@ -37,12 +37,14 @@ def verify_token(token: str) -> bool:
 def decode_token(token: str) -> dict:
     return jwt.decode(token, TOKEN_SECRET_KEY, algorithms=[TOKEN_ALGORITHM])
 
+
 def get_token_user_id(token: str) -> uuid.UUID | None:
     if token is None or not verify_token(token):
         return None
 
     token_data = decode_token(token)
     return uuid.UUID(token_data['sub'])
+
 
 def get_token_user_id_http(token: Annotated[str, Query()] = None):
     res = get_token_user_id(token)
@@ -53,6 +55,7 @@ def get_token_user_id_http(token: Annotated[str, Query()] = None):
             headers={'WWW-Authenticate': 'Bearer'},
         )
     return res
+
 
 def get_token_user_id_ws(token: Annotated[str, Query()] = None):
     res = get_token_user_id(token)
