@@ -1,6 +1,7 @@
 import uuid
 
 from sqlmodel import SQLModel, Field
+from datetime import datetime, UTC
 
 class WSRequest(SQLModel, table=False):
     type: str
@@ -19,3 +20,13 @@ class WSMessageEdit(SQLModel, table=False):
 
 class WSMessageDelete(SQLModel, table=False):
     id: uuid.UUID
+
+
+async def handle_ping(ws, payload):
+    await ws.send_json({
+        "type": "pong",
+        "payload": {
+            "ts": payload.get("ts"),
+            "server_ts": datetime.now(tz=UTC).isoformat(),
+        },
+    })
