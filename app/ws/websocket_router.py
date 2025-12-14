@@ -21,12 +21,17 @@ from utils.auth import get_token_user_id_ws
 router = APIRouter(prefix='/ws')
 
 
-class WSMessage(BaseModel):
+class WSRequest(BaseModel):
+    type: str
+    payload: dict
+
+
+class WSMessageCreate(BaseModel):
     conversation_id: uuid.UUID
     body: str = Field(max_length=10000)
 
 
-@router.websocket('/messages')
+@router.websocket('')
 async def ws_messages_endpoint(
     websocket: WebSocket,
     user_id: Annotated[uuid.UUID, Depends(get_token_user_id_ws)],
@@ -36,7 +41,8 @@ async def ws_messages_endpoint(
     try:
         while True:
             data = await websocket.receive_json()
-            ws_message = WSMessage.model_validate(data)
+            ws_request = WSRequest.model_validate(data)
+            ws_message = WSMessageCreate.model_validate(ws_request.payload)
 
             participant = session.exec(
                 select(ConversationParticipant)
