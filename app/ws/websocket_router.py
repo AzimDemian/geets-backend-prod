@@ -10,26 +10,23 @@ from fastapi import (
     Depends,
     status,
 )
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import ValidationError
+from starlette.concurrency import run_in_threadpool
 from sqlmodel import Session, select
 
+import services.messaging as messaging_service
 from .connection import manager
 from db.session import get_session
-from schemas import Message, ConversationParticipant
+from schemas.ws import WSRequest, WSMessageCreate, WSMessageEdit, WSMessageDelete
 from utils.auth import get_token_user_id_ws
 
 router = APIRouter(prefix='/ws')
 
-
-class WSRequest(BaseModel):
-    type: str
-    payload: dict
-
-
-class WSMessageCreate(BaseModel):
-    conversation_id: uuid.UUID
-    body: str = Field(max_length=10000)
-
+EVENT_HANDLERS = {
+    'message.create': (WSMessageCreate, messaging_service.create_message, 'conversation.{conversation_id}.created'),
+    'message.edit': (WSMessageEdit, messaging_service.edit_message, 'conversation.{conversation_id}.edited'),
+    'message.delete': (WSMessageDelete, messaging_service.delete_message, 'conversation.{conversation_id}.deleted'),
+}
 
 @router.websocket('')
 async def ws_messages_endpoint(
@@ -42,34 +39,32 @@ async def ws_messages_endpoint(
         while True:
             data = await websocket.receive_json()
             ws_request = WSRequest.model_validate(data)
-            ws_message = WSMessageCreate.model_validate(ws_request.payload)
 
-            participant = session.exec(
-                select(ConversationParticipant)
-                .where(
-                    ConversationParticipant.conversation_id == ws_message.conversation_id,
-                    ConversationParticipant.user_id == user_id,
-                )
-            ).first()
+            if ws_request.type not in EVENT_HANDLERS:
+                await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+                return
+            
+            payload_schema, handler, routing_key_template = EVENT_HANDLERS[ws_request.type]
 
-            if not participant:
-                raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)
+            payload = payload_schema.model_validate(ws_request.payload).model_dump()
 
-            message = Message(
-                conversation_id=ws_message.conversation_id,
-                sender_id=user_id,
-                body=ws_message.body,
-            )
-            session.add(message)
-            session.commit()
-            session.refresh(message)
-
-            message_str = message.model_dump_json()
-            message_dict = json.loads(message_str)
+            try:
+                result = await run_in_threadpool(handler, session, user_id, payload)
+            except messaging_service.PermissionError:
+                await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+                return
+            except ValueError:
+                await websocket.close(code=status.WS_1003_UNSUPPORTED_DATA)
+                return
+            
+            event = {
+                'type': ws_request.type,
+                'payload': result,
+            }
 
             await websocket.app.state.message_publisher.publish(
-                routing_key=f'create.{ws_message.conversation_id}',
-                payload=message_dict,
+                routing_key=routing_key_template.format(**result),
+                payload=event,
             )
     except ValidationError:
         raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)

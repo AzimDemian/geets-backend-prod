@@ -1,4 +1,5 @@
 import asyncio
+import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -7,7 +8,7 @@ from api import api_router
 from config import RMQ_URL
 from db.session import init_db
 from rabbitmq import RMQConnection, RMQConsumer, RMQPublisher
-from services.messaging import rmq_websocket_handler
+from services.rmq_ws_bridge import rmq_ws_bridge
 from ws import ws_router
 
 @asynccontextmanager
@@ -17,14 +18,32 @@ async def lifespan(app: FastAPI):
     await app.state.rabbit.connect()
     await app.state.rabbit.declare_exchange('messages')
     app.state.message_publisher = RMQPublisher(app.state.rabbit, exchange_name='messages')
-    app.state.message_consumer = RMQConsumer(
-        app.state.rabbit, queue_name='create', routing_keys=['create.*'], exchange_name='messages'
+    app.state.consumers = []
+    app.state.consumer_tasks = []
+
+    message_routing_keys = [f'conversation.*.{et}' for et in ('created', 'edited', 'deleted')]
+    queue_name = f'ws_bridge.{uuid.uuid4()}'
+
+    message_consumer = RMQConsumer(
+        app.state.rabbit,
+        queue_name=queue_name,
+        routing_keys=message_routing_keys,
+        exchange_name='messages',
     )
-    asyncio.create_task(app.state.message_consumer.start_consuming(handler=rmq_websocket_handler))
+    app.state.consumers.append(message_consumer)
+
+    for consumer in app.state.consumers:
+        task = asyncio.create_task(consumer.start_consuming(handler=rmq_ws_bridge))
+        app.state.consumer_tasks.append(task)
 
     yield
 
-    await app.state.message_consumer.stop_consuming()
+    for consumer in app.state.consumers:
+        await consumer.stop_consuming()
+    
+    for task in app.state.consumer_tasks:
+        task.cancel()
+
     await app.state.rabbit.close()
 
 app = FastAPI(lifespan=lifespan)
