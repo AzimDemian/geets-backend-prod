@@ -101,9 +101,15 @@ async def get_group_messages(
     user_id: Annotated[uuid.UUID, Depends(get_token_user_id_http)],
     session: Session = Depends(get_session),
 ) -> list[Message]:
+    group = session.get(Conversation, group_id)
     group_participant = session.get(ConversationParticipant, (group_id, user_id))
+
+    if not group or group.deleted:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Conversation not found')
+
     if not group_participant:
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You have no access to the group')
+
     return get_messages(session, group_id)
 
 

@@ -76,9 +76,14 @@ async def get_conversation_messages(
     user_id: Annotated[uuid.UUID, Depends(get_token_user_id_http)],
     session: Session = Depends(get_session),
 ) -> list[Message]:
+    conversation = session.get(Conversation, conversation_id)
     conversation_participant = session.get(ConversationParticipant, (conversation_id, user_id))
+    if not conversation or conversation.deleted:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Conversation not found')
+
     if not conversation_participant:
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You have no access to the conversation')
+
     return get_messages(session, conversation_id)
 
 
