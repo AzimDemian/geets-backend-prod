@@ -32,10 +32,14 @@ async def ws_messages_endpoint(
     user_id: Annotated[uuid.UUID, Depends(get_token_user_id_ws)],
     session: Session = Depends(get_session)
 ):
+    print('abc1')
     await manager.connect(user_id, websocket)
+    print('abc2')
     try:
         while True:
+            print('abc3')
             data = await websocket.receive_json()
+            print('abc4')
             ws_message = WSMessage.model_validate(data)
 
             participant = session.exec(
@@ -56,10 +60,12 @@ async def ws_messages_endpoint(
             )
             session.add(message)
             session.commit()
+            session.refresh(message)
 
-            message_dict = message.model_dump()
+            message_str = message.model_dump_json()
+            message_dict = json.loads(message_str)
 
-            await websocket.app.state.publisher.publish(
+            await websocket.app.state.message_publisher.publish(
                 routing_key=f'create.{ws_message.conversation_id}',
                 payload=message_dict,
             )

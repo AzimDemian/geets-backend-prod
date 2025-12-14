@@ -16,7 +16,7 @@ class RMQPublisher:
     async def publish(
         self,
         routing_key: str,
-        payload: dict[str, Any],
+        payload: dict,
         headers: Optional[dict[str, str]] = None
     ) -> None:
         exchange = await self.ensure_exchange()

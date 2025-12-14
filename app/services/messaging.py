@@ -14,9 +14,10 @@ async def rmq_websocket_handler(inc_message: aio_pika.IncomingMessage) -> None:
     try:
         data = json.loads(inc_message.body.decode())
         message = Message.model_validate(data)
-        message_dict = message.model_dump()
+        message_str = message.model_dump_json()
+        message_dict = json.loads(message_str)
 
-        session: Session = get_session()
+        session: Session = next(get_session())
 
         participants = session.exec(
             select(ConversationParticipant)
@@ -24,6 +25,7 @@ async def rmq_websocket_handler(inc_message: aio_pika.IncomingMessage) -> None:
         ).fetchall()
 
         for participant in participants:
+            print('sending')
             await manager.send_to_user(message_dict, participant.user_id)
     except Exception:
         logger.exception('Failed to bridge RMQ to WS')
