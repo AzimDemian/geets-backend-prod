@@ -3,12 +3,18 @@ from datetime import datetime, timedelta, UTC
 from typing import Annotated
 
 import jwt
-from fastapi import Query, HTTPException, WebSocketException, status
+from fastapi import Depends, Query, HTTPException, WebSocketException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from config import TOKEN_SECRET_KEY, TOKEN_ALGORITHM, TOKEN_EXPIRE_MINS, pwd_ctx
 
+
 def get_password_hash(plain: str) -> str:
     return pwd_ctx.hash(plain)
+
+
+def verify_password(plain: str, hashed: str) -> bool:
+    return pwd_ctx.verify(plain, hashed)
 
 
 def create_access_token(data: dict) -> str:
@@ -46,7 +52,12 @@ def get_token_user_id(token: str) -> uuid.UUID | None:
     return uuid.UUID(token_data['sub'])
 
 
-def get_token_user_id_http(token: Annotated[str, Query()] = None):
+security = HTTPBearer()
+
+def get_token_user_id_http(
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)]
+):
+    token = credentials.credentials
     res = get_token_user_id(token)
     if res is None:
         raise HTTPException(

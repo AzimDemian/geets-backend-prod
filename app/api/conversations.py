@@ -18,6 +18,10 @@ class CreateConversationRequest(BaseModel):
     other_id: uuid.UUID
 
 
+class MessageCreate(BaseModel):
+    body: str
+
+
 class ParticipantInformation(BaseModel):
     id: uuid.UUID
     username: str
@@ -31,15 +35,20 @@ async def create_conversation(
     user_id: Annotated[uuid.UUID, Depends(get_token_user_id_http)],
     session: Session = Depends(get_session),
 ) -> Conversation:
+    user = session.get(User, user_id)
     other = session.get(User, data.other_id)
+
     if not other:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Adding a non-existing user')
+    
+    if user.id == other.id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Trying to create conversation with yourself')
 
-    conversation = Conversation()
+    conversation = Conversation(title=f'{user.username}, {other.username}')
 
     creating_participant = ConversationParticipant(
         conversation_id=conversation.id,
-        user_id=user_id,
+        user_id=user.id,
     )
     
     other_participant = ConversationParticipant(
@@ -78,13 +87,38 @@ async def get_conversation_messages(
 ) -> list[Message]:
     conversation = session.get(Conversation, conversation_id)
     conversation_participant = session.get(ConversationParticipant, (conversation_id, user_id))
+    if not conversation or conversation.deleted or not conversation_participant:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Conversation not found')
+
+    return get_messages(session, conversation_id)
+
+
+@router.post('/{conversation_id}/messages')
+async def send_message(
+    conversation_id: uuid.UUID,
+    data: MessageCreate,
+    user_id: Annotated[uuid.UUID, Depends(get_token_user_id_http)],
+    session: Session = Depends(get_session),
+) -> Message:
+    conversation = session.get(Conversation, conversation_id)
     if not conversation or conversation.deleted:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Conversation not found')
 
-    if not conversation_participant:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You have no access to the conversation')
+    participant = session.get(ConversationParticipant, (conversation_id, user_id))
+    if not participant:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not part of this conversation')
 
-    return get_messages(session, conversation_id)
+    new_message = Message(
+        conversation_id=conversation_id,
+        sender_id=user_id,
+        body=data.body,
+    )
+
+    session.add(new_message)
+    session.commit()
+    session.refresh(new_message)
+
+    return new_message
 
 
 @router.delete('/{conversation_id}', status_code=status.HTTP_204_NO_CONTENT)

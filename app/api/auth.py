@@ -30,7 +30,7 @@ class FailedAuthResponse(BaseModel):
 async def register(data: LoginRequest, session: Session = Depends(get_session)) -> SuccessfulAuthResponse:
     existing = session.exec(select(User).where(User.username == data.username)).first()
     if existing:
-        raise HTTPException(status_code=400, detail='Username already registered')
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Username already registered')
 
     user = User(
         username=data.username,
