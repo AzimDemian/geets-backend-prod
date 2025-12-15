@@ -192,21 +192,43 @@ def mark_seen(session: Session, user_id: uuid.UUID, payload: dict) -> dict:
     cutoff = last_msg.created_at
     now = datetime.now(tz=UTC)
 
+    if last_msg.sender_id == user_id:
+        prev_other = session.exec(
+            select(Message)
+            .where(
+                Message.conversation_id == conversation_id,
+                Message.deleted == False,
+                Message.created_at <= cutoff,
+                Message.sender_id != user_id,
+            )
+            .order_by(Message.created_at.desc())
+            .limit(1)
+        ).first()
+
+        if not prev_other:
+            return {
+                "conversation_id": str(conversation_id),
+                "user_id": str(user_id),
+                "status": "SEEN",
+                "last_seen_message_id": str(last_seen_message_id),
+                "seen_at": now.isoformat(),
+                "updated_count": 0,
+            }
+
+        cutoff = prev_other.created_at
+
     message_ids = session.exec(
         select(Message.id)
         .where(
             Message.conversation_id == conversation_id,
             Message.deleted == False,
             Message.created_at <= cutoff,
+            Message.sender_id != user_id,
         )
     ).all()
 
     updated = 0
     for mid in message_ids:
-        msg = session.get(Message, mid)
-        if msg and msg.sender_id == user_id:
-            continue
-
         receipt = session.get(MessageReceipt, (mid, user_id))
         if not receipt:
             receipt = MessageReceipt(message_id=mid, user_id=user_id, status=ReceiptStatus.SENT)
@@ -217,15 +239,9 @@ def mark_seen(session: Session, user_id: uuid.UUID, payload: dict) -> dict:
             receipt.seen_at = now
             if receipt.delivered_at is None:
                 receipt.delivered_at = now
-            session.add(receipt)
-
-        receipt.status = ReceiptStatus.SEEN
-        receipt.seen_at = now
-        if receipt.delivered_at is None:
-            receipt.delivered_at = now
+            updated += 1
 
         session.add(receipt)
-        updated += 1
 
     session.commit()
 
