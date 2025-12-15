@@ -6,7 +6,7 @@ import jwt
 from fastapi import Depends, Query, HTTPException, WebSocketException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
-from config import TOKEN_SECRET_KEY, TOKEN_ALGORITHM, TOKEN_EXPIRE_MINS, pwd_ctx
+from app.config import TOKEN_SECRET_KEY, TOKEN_ALGORITHM, TOKEN_EXPIRE_MINS, pwd_ctx
 
 
 def get_password_hash(plain: str) -> str:

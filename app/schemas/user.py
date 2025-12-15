@@ -1,6 +1,6 @@
 import uuid
 
-from db.types import EncryptedString 
+from app.db.types import EncryptedString 
 from sqlmodel import SQLModel, Field, Column
 
 class User(SQLModel, table=True):

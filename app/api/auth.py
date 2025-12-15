@@ -3,10 +3,10 @@ from fastapi.routing import APIRouter
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
-from config import PASSWORD_REGEX
-from db.session import get_session
-from schemas import User
-from utils.auth import get_password_hash, create_access_token, verify_password
+from app.config import PASSWORD_REGEX
+from app.db.session import get_session
+from app.schemas import User
+from app.utils.auth import get_password_hash, create_access_token, verify_password
 
 router = APIRouter(prefix='/auth')
 

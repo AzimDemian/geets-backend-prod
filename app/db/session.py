@@ -1,7 +1,7 @@
 from pathlib import Path
 from sqlmodel import Session, SQLModel, create_engine
 
-from schemas import *
+from app.schemas import *
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = ROOT / 'data'

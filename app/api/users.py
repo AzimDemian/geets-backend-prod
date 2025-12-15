@@ -3,8 +3,8 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, Query, status
 from fastapi.routing import APIRouter
 
-from db.session import get_session
-from schemas import User
+from app.db.session import get_session
+from app.schemas import User
 from sqlmodel import Session, select
 
 router = APIRouter(prefix='/users')

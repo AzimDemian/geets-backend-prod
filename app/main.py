@@ -5,12 +5,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api import api_router
-from config import RMQ_URL
-from db.session import init_db
-from rabbitmq import RMQConnection, RMQConsumer, RMQPublisher
-from services.rmq_ws_bridge import rmq_ws_bridge
-from ws import ws_router
+from app.api import api_router
+from app.config import RMQ_URL
+from app.db.session import init_db
+from app.rabbitmq import RMQConnection, RMQConsumer, RMQPublisher
+from app.services.rmq_ws_bridge import rmq_ws_bridge
+from app.ws import ws_router
 
 
 @asynccontextmanager

@@ -1,5 +1,5 @@
 from cryptography.fernet import Fernet, InvalidToken
-from config import DATA_ENCRYPTION_KEYS
+from app.config import DATA_ENCRYPTION_KEYS
 
 _PREFIX = 'enc:'
 

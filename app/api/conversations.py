@@ -5,12 +5,12 @@ from fastapi import Depends, HTTPException, status
 from fastapi.routing import APIRouter
 from pydantic import BaseModel
 
-from db.session import get_session
-from schemas import Conversation, ConversationParticipant, Message, User
-from schemas.conversation_participant import ParticipantRole
-from services.messaging import MessageInformation, get_messages
+from app.db.session import get_session
+from app.schemas import Conversation, ConversationParticipant, Message, User
+from app.schemas.conversation_participant import ParticipantRole
+from app.services.messaging import get_messages
 from sqlmodel import Session, select
-from utils.auth import get_token_user_id_http
+from app.utils.auth import get_token_user_id_http
 
 router = APIRouter(prefix='/conversations')
 

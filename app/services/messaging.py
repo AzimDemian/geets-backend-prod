@@ -4,7 +4,7 @@ import uuid
 
 from pydantic import BaseModel
 from sqlmodel import Session, select, desc
-from schemas import ConversationParticipant, Message, MessageReceipt, ReceiptStatus, Conversation, User, dump_model
+from app.schemas import ConversationParticipant, Message, MessageReceipt, ReceiptStatus, Conversation, dump_model
 from datetime import datetime, UTC
 
 logger = logging.getLogger(__name__)
