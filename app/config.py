@@ -5,7 +5,7 @@ import re
 
 from passlib.context import CryptContext
 
-RMQ_URL = 'amqp://guest:guest@localhost'
+RMQ_URL = os.getenv("RMQ_URL", "amqp://guest:guest@localhost")
 
 ENV_PATH = Path(__file__).resolve().parents[1] / '.env'
 load_dotenv(dotenv_path=ENV_PATH)
