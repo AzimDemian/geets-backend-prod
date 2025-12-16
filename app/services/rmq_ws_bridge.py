@@ -6,7 +6,7 @@ import aio_pika
 from sqlmodel import Session, select
 
 from db.session import get_session
-from schemas import ConversationParticipant
+from schemas import ConversationParticipant, User
 from ws.connection import manager
 
 logger = logging.getLogger(__name__)
@@ -58,13 +58,15 @@ async def rmq_ws_bridge(inc_message: aio_pika.IncomingMessage) -> None:
                 select(ConversationParticipant.user_id)
                 .where(ConversationParticipant.conversation_id == conversation_id)
             ).all()
+
+            sender_username = session.get(User, actor_id).username
+            payload['sender_username'] = sender_username
         finally:
             session.close()
 
         out = {'type': event_type, 'payload': payload}
 
         for uid in participant_ids:
-            # чтобы sender не получал дубль (он уже получил echo в ws endpoint)
             if actor_id is not None and uid == actor_id:
                 continue
             await manager.send_to_user(out, uid)

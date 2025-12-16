@@ -6,9 +6,9 @@ from fastapi.routing import APIRouter
 from pydantic import BaseModel, Field
 
 from db.session import get_session
-from schemas import Conversation, ConversationParticipant, Message, User
+from schemas import Conversation, ConversationParticipant, User
 from schemas.conversation_participant import ParticipantRole
-from services.messaging import get_messages
+from services.messaging import MessageInformation, get_messages
 from sqlmodel import Session, select
 from utils.auth import get_token_user_id_http
 
@@ -25,13 +25,21 @@ class ParticipantInformation(BaseModel):
     display_name: str | None
     role: ParticipantRole
 
+
+class GroupInformation(BaseModel):
+    id: uuid.UUID
+    title: str
+    is_group: bool = True
+    role: ParticipantRole
+
+
 @router.get('')
 async def get_groups(
     user_id: Annotated[uuid.UUID, Depends(get_token_user_id_http)],
     session: Session = Depends(get_session),
-) -> list[Conversation]:
+) -> list[GroupInformation]:
     groups = session.exec(
-        select(ConversationParticipant.conversation_id.label('id'), Conversation.title, Conversation.is_group)
+        select(ConversationParticipant.conversation_id.label('id'), Conversation.title, ConversationParticipant.role)
         .where(ConversationParticipant.user_id == user_id, Conversation.is_group == True, Conversation.deleted == False)
         .join(Conversation, Conversation.id == ConversationParticipant.conversation_id)
     ).all()
@@ -44,8 +52,13 @@ async def create_group(
     user_id: Annotated[uuid.UUID, Depends(get_token_user_id_http)],
     session: Session = Depends(get_session),
 ) -> Conversation:
-    added_participants = session.exec(select(User.id).where(User.id.in_(data.participant_ids))).all()
-    if len(added_participants) != len(data.participant_ids):
+    ids = set(data.participant_ids.copy())
+
+    if user_id in ids:
+        ids.remove(user_id)
+
+    added_participants = session.exec(select(User.id).where(User.id.in_(ids))).all()
+    if len(added_participants) != len(ids):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Adding non-existing user(s)')
 
     group = Conversation(title=data.title, is_group=True)
@@ -58,7 +71,7 @@ async def create_group(
     )
     participants.append(creating_participant)
 
-    for new_participant_id in data.participant_ids:
+    for new_participant_id in ids:
         conversation_participant = ConversationParticipant(
             conversation_id=group.id,
             user_id=new_participant_id,
@@ -100,7 +113,7 @@ async def get_group_messages(
     group_id: uuid.UUID,
     user_id: Annotated[uuid.UUID, Depends(get_token_user_id_http)],
     session: Session = Depends(get_session),
-) -> list[Message]:
+) -> list[MessageInformation]:
     group = session.get(Conversation, group_id)
     group_participant = session.get(ConversationParticipant, (group_id, user_id))
 

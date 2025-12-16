@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from db.session import get_session
 from schemas import Conversation, ConversationParticipant, Message, User
 from schemas.conversation_participant import ParticipantRole
-from services.messaging import get_messages
+from services.messaging import MessageInformation, get_messages
 from sqlmodel import Session, select
 from utils.auth import get_token_user_id_http
 
@@ -27,6 +27,12 @@ class ParticipantInformation(BaseModel):
     username: str
     display_name: str | None
     role: ParticipantRole
+
+
+class ConversationInformation(BaseModel):
+    id: uuid.UUID
+    title: str
+    is_group: bool = False
 
 
 @router.post('/create')
@@ -71,7 +77,7 @@ async def get_conversations(
     session: Session = Depends(get_session),
 ) -> list[Conversation]:
     conversations = session.exec(
-        select(ConversationParticipant.conversation_id.label('id'), Conversation.title, Conversation.is_group)
+        select(ConversationParticipant.conversation_id.label('id'), Conversation.title)
         .where(ConversationParticipant.user_id == user_id, Conversation.is_group == False, Conversation.deleted == False)
         .join(Conversation, Conversation.id == ConversationParticipant.conversation_id)
     ).all()
@@ -84,7 +90,7 @@ async def get_conversation_messages(
     conversation_id: uuid.UUID,
     user_id: Annotated[uuid.UUID, Depends(get_token_user_id_http)],
     session: Session = Depends(get_session),
-) -> list[Message]:
+) -> list[MessageInformation]:
     conversation = session.get(Conversation, conversation_id)
     conversation_participant = session.get(ConversationParticipant, (conversation_id, user_id))
     if not conversation or conversation.deleted or not conversation_participant:

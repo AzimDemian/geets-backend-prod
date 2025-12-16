@@ -2,8 +2,9 @@ import json
 import logging
 import uuid
 
+from pydantic import BaseModel
 from sqlmodel import Session, select, desc
-from schemas import ConversationParticipant, Message, MessageReceipt, ReceiptStatus, Conversation, dump_model
+from schemas import ConversationParticipant, Message, MessageReceipt, ReceiptStatus, Conversation, User, dump_model
 from datetime import datetime, UTC
 
 logger = logging.getLogger(__name__)
@@ -19,6 +20,17 @@ class PermissionError(Exception):
 
 class PermissionError(Exception):
     pass
+
+class MessageInformation(BaseModel):
+    id: uuid.UUID
+    conversation_id: uuid.UUID
+    sender_id: uuid.UUID
+    sender_username: str
+
+    body: str
+
+    created_at: datetime
+    edited: bool
 
 def require_conversation(session: Session, conversation_id: uuid.UUID) -> Conversation:
     conv = session.get(Conversation, conversation_id)
@@ -120,12 +132,23 @@ def delete_message(session: Session, user_id: uuid.UUID, payload: dict) -> dict:
     session.refresh(message)
     return dump_model(message)
 
-def get_messages(session: Session, conversation_id: uuid.UUID) -> list[Message]:
+
+def get_messages(session: Session, conversation_id: uuid.UUID) -> list[MessageInformation]:
     messages = session.exec(
-        select(Message)
+        select(Message.id,
+               Message.conversation_id,
+               Message.sender_id,
+               Message.body,
+               Message.created_at,
+               Message.edited,
+               User.username.label('sender_username')
+        )
         .where(Message.conversation_id == conversation_id, Message.deleted == False)
-        .order_by(desc(Message.created_at))
+        .join(User, User.id == Message.sender_id)
+        .order_by(Message.created_at)
     ).all()
+    for message in messages:
+        print(message)
     return list(messages)
 
 
