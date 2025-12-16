@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from app.db.session import get_session
 from app.schemas import Conversation, ConversationParticipant, Message, User
 from app.schemas.conversation_participant import ParticipantRole
-from app.services.messaging import get_messages
+from app.services.messaging import get_messages, MessageInformation
 from sqlmodel import Session, select
 from app.utils.auth import get_token_user_id_http
 
