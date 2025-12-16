@@ -6,7 +6,7 @@ import aio_pika
 from sqlmodel import Session, select
 
 from app.db.session import get_session
-from app.schemas import ConversationParticipant
+from app.schemas import ConversationParticipant, User
 from app.ws.connection import manager
 
 logger = logging.getLogger(__name__)
