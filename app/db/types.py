@@ -1,5 +1,5 @@
 from sqlalchemy.types import TypeDecorator, String
-from utils.crypto import encrypt_str, decrypt_str
+from app.utils.crypto import encrypt_str, decrypt_str
 
 class EncryptedString(TypeDecorator):
     impl = String

@@ -2,9 +2,9 @@ import uuid
 from datetime import datetime, UTC
 from sqlmodel import SQLModel, Field
 from sqlalchemy import Column
-from db.types import EncryptedString
-from schemas.message_out import MessageOut
-from schemas.message_receipt import ReceiptStatus
+from app.db.types import EncryptedString
+from app.schemas.message_out import MessageOut
+from app.schemas.message_receipt import ReceiptStatus
 
 class Message(SQLModel, table=True):
     __tablename__ = 'messages'

@@ -11,9 +11,9 @@ from pydantic import ValidationError
 from starlette.concurrency import run_in_threadpool
 from starlette.websockets import WebSocketState
 
-import services.messaging as messaging_service
-from db.session import get_session
-from schemas.ws import (
+import app.services.messaging as messaging_service
+from app.db.session import get_session
+from app.schemas.ws import (
     WSRequest,
     WSMessageCreate,
     WSMessageEdit,
@@ -22,7 +22,7 @@ from schemas.ws import (
     WSMessageSeen,
     handle_ping,
 )
-from utils.auth import get_token_user_id_ws
+from app.utils.auth import get_token_user_id_ws
 from .connection import manager
 
 logger = logging.getLogger(__name__)
