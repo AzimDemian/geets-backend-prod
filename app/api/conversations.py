@@ -6,10 +6,11 @@ from fastapi.routing import APIRouter
 from pydantic import BaseModel
 
 from app.db.session import get_session
-from app.schemas import Conversation, ConversationParticipant, Message, User
+from app.schemas import Conversation, ConversationParticipant, Message, User, MessageReceipt, ReceiptStatus
 from app.schemas.conversation_participant import ParticipantRole
 from app.services.messaging import get_messages, MessageInformation
-from sqlmodel import Session, select
+from sqlalchemy import and_
+from sqlmodel import Session, func, select
 from app.utils.auth import get_token_user_id_http
 
 router = APIRouter(prefix='/conversations')
@@ -33,6 +34,7 @@ class ConversationInformation(BaseModel):
     id: uuid.UUID
     title: str
     is_group: bool = False
+    unread_count: int = 0
 
 
 @router.post('/create')
@@ -70,19 +72,48 @@ async def create_conversation(
 
     return conversation
 
-
 @router.get('')
 async def get_conversations(
     user_id: Annotated[uuid.UUID, Depends(get_token_user_id_http)],
     session: Session = Depends(get_session),
-) -> list[Conversation]:
-    conversations = session.exec(
-        select(ConversationParticipant.conversation_id.label('id'), Conversation.title)
-        .where(ConversationParticipant.user_id == user_id, Conversation.is_group == False, Conversation.deleted == False)
-        .join(Conversation, Conversation.id == ConversationParticipant.conversation_id)
-    ).all()
+) -> list[ConversationInformation]:
 
-    return list(conversations)
+    stmt = (
+        select(
+            Conversation.id,
+            Conversation.title,
+            Conversation.is_group,
+            func.count(MessageReceipt.message_id).label("unread_count"),
+        )
+        .join(ConversationParticipant, ConversationParticipant.conversation_id == Conversation.id)
+        .outerjoin(Message, Message.conversation_id == Conversation.id)
+        .outerjoin(
+            MessageReceipt,
+            and_(
+                MessageReceipt.message_id == Message.id,
+                MessageReceipt.user_id == user_id,
+                MessageReceipt.status != ReceiptStatus.SEEN,
+            ),
+        )
+        .where(
+            ConversationParticipant.user_id == user_id,
+            Conversation.is_group == False,
+        )
+        .group_by(Conversation.id)
+    )
+
+    rows = session.exec(stmt).all()
+
+    return [
+        ConversationInformation(
+            id=r[0],
+            title=r[1],
+            is_group=r[2],
+            unread_count=r[3] or 0,
+        )
+        for r in rows
+    ]
+
 
 
 @router.get('/{conversation_id}/messages')

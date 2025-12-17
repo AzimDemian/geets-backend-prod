@@ -6,7 +6,7 @@ from fastapi.routing import APIRouter
 from pydantic import BaseModel, Field
 
 from app.db.session import get_session
-from app.schemas import Conversation, ConversationParticipant, Message, User
+from app.schemas import Conversation, ConversationParticipant, Message, User, MessageReceipt, ReceiptStatus
 from app.schemas.conversation_participant import ParticipantRole
 from app.services.messaging import get_messages, MessageInformation
 from sqlmodel import Session, select
@@ -31,20 +31,61 @@ class GroupInformation(BaseModel):
     title: str
     is_group: bool = True
     role: ParticipantRole
+    unread_count: int = 0
 
 
-@router.get('')
+@router.get("")
 async def get_groups(
     user_id: Annotated[uuid.UUID, Depends(get_token_user_id_http)],
     session: Session = Depends(get_session),
 ) -> list[GroupInformation]:
-    groups = session.exec(
-        select(ConversationParticipant.conversation_id.label('id'), Conversation.title, ConversationParticipant.role)
-        .where(ConversationParticipant.user_id == user_id, Conversation.is_group == True, Conversation.deleted == False)
-        .join(Conversation, Conversation.id == ConversationParticipant.conversation_id)
-    ).all()
 
-    return list(groups)
+    stmt = (
+        select(
+            Conversation.id,
+            Conversation.title,
+            ConversationParticipant.role,
+            func.count(MessageReceipt.message_id).label("unread_count"),
+        )
+        .join(
+            ConversationParticipant,
+            ConversationParticipant.conversation_id == Conversation.id,
+        )
+        .outerjoin(
+            Message,
+            Message.conversation_id == Conversation.id,
+        )
+        .outerjoin(
+            MessageReceipt,
+            and_(
+                MessageReceipt.message_id == Message.id,
+                MessageReceipt.user_id == user_id,
+                MessageReceipt.status != ReceiptStatus.SEEN,
+            ),
+        )
+        .where(
+            ConversationParticipant.user_id == user_id,
+            Conversation.is_group == True,
+        )
+        .group_by(
+            Conversation.id,
+            Conversation.title,
+            ConversationParticipant.role,
+        )
+    )
+
+    rows = session.exec(stmt).all()
+
+    return [
+        GroupInformation(
+            id=r[0],
+            title=r[1],
+            role=r[2],
+            unread_count=r[3] or 0,
+        )
+        for r in rows
+    ]
+
 
 @router.post('/create')
 async def create_group(
